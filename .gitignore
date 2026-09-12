@@ -1,0 +1,15 @@
+.DS_Store
+**/node_modules/
+**/__pycache__/
+**/.next/
+**/.vinext/
+**/.wrangler/
+**/dist/
+**/.env
+**/.env.*
+# Private development evidence and historical context: review before publishing.
+/context/
+/work/
+/outputs/*.zip
+# The deployed website remains its own repository and is not a root-repository gitlink.
+/outputs/ad-accelerator-site/

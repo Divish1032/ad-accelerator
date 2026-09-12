@@ -1,0 +1,21 @@
+{
+  "media": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"current\": {\n    \"rate\": 1.25,\n    \"paused\": false,\n    \"enabled\": true,\n    \"ad\": false,\n    \"live\": true,\n    \"status\": \"Live playback is excluded\"\n  },\n  \"transitions\": [\n    {\n      \"rate\": 1.25,\n      \"paused\": false,\n      \"enabled\": true,\n      \"ad\": true,\n      \"live\": false,\n      \"status\": \"Checking ad label\"\n    },\n    {\n      \"rate\": 16,\n      \"paused\": false,\n      \"enabled\": true,\n      \"ad\": true,\n      \"live\": false,\n      \"status\": \"Ad detected · 16× (20× unavailable)\"\n    },\n    {\n      \"rate\": 1.25,\n      \"paused\": false,\n      \"enabled\": false,\n      \"ad\": true,\n      \"live\": false,\n      \"status\": \"Off\"\n    },\n    {\n      \"rate\": 1.25,\n      \"paused\": false,\n      \"enabled\": true,\n      \"ad\": true,\n      \"live\": false,\n      \"status\": \"Checking ad label\"\n    },\n    {\n      \"rate\": 16,\n      \"paused\": false,\n      \"enabled\": true,\n      \"ad\": true,\n      \"live\": false,\n      \"status\": \"Ad detected · 16× (20× unavailable)\"\n    },\n    {\n      \"rate\": 1.25,\n      \"paused\": false,\n      \"enabled\": true,\n      \"ad\": false,\n      \"live\": true,\n      \"status\": \"Live playback is excluded\"\n    }\n  ]\n}[]"
+      }
+    ],
+    "isError": false
+  },
+  "privacyFailure": {
+    "content": [
+      {
+        "type": "text",
+        "text": "Chrome cannot install tracking-link protection (memoryLimitExceeded). Link cleanup was not enabled.false[]"
+      }
+    ],
+    "isError": false
+  },
+  "scope": "Chrome localhost fixtures; media native, privacy APIs simulated. Not installed extension qualification."
+}

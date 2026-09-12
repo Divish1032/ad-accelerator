@@ -1,0 +1,22 @@
+{
+  "builtAt": "2026-09-05T21:24:56.576Z",
+  "cosmeticSelectors": 13032,
+  "files": [
+    {
+      "file": "ads.txt",
+      "sha256": "1272668a78c1788588de391f580113506a3f3360677098bbf5a06359451cce5b"
+    },
+    {
+      "file": "threats.txt",
+      "sha256": "ebb717568229d57fc9822750f8864b515942df1ebf2e2d22171a9674b91aa939"
+    },
+    {
+      "file": "popups.txt",
+      "sha256": "e0957abe381f2dcd24e42ba73cee4d9a03fd37384657501db5e0301646915637"
+    },
+    {
+      "file": "easylist-source.txt",
+      "sha256": "3861492e0d05733c9611c4418aee05f6a407c12c65a32464fa12010c9de5e42f"
+    }
+  ]
+}

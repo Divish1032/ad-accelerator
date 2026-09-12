@@ -1,0 +1,67 @@
+{
+  "manifest_version": 3,
+  "name": "Ad Accelerator",
+  "version": "0.16.0",
+  "description": "Block listed ads and trackers, skip or speed up detected video ads, and control protection site by site.",
+  "permissions": [
+    "storage",
+    "alarms",
+    "declarativeNetRequest",
+    "webNavigation",
+    "scripting"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Ad Accelerator",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "core.js",
+        "detector.js",
+        "sites.js",
+        "video-actions.js",
+        "site-compat.js",
+        "element-rules.js",
+        "element-picker.js",
+        "adaptive-core.js",
+        "adaptive-elements.js",
+        "content.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "minimum_chrome_version": "145",
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; connect-src 'self' https://raw.githubusercontent.com;"
+  },
+  "optional_permissions": [
+    "privacy",
+    "contentSettings",
+    "browsingData"
+  ],
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "homepage_url": "https://ad-accelerator.kumar-divyansh1996.chatgpt.site",
+  "author": "Divyansh Kumar"
+}

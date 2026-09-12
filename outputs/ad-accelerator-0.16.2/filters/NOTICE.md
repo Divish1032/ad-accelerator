@@ -1,0 +1,7 @@
+# Filter sources and licenses
+
+Bundled HaGeZi Multi Light, Threat Intelligence Mini and Popup Ads data is from https://github.com/hagezi/dns-blocklists by HaGeZi. The unmodified downloaded files are ads.txt, threats.txt and popups.txt. Their headers preserve dates, versions, attribution and upstream locations. Distributed under GPL-3.0; see LICENSE-HaGeZi.txt. The runtime compiler groups domains into Chrome requestDomains rules without changing domain boundaries. Subdomains are matched by Chrome.
+
+EasyList is by The EasyList authors (https://easylist.to/). Source: https://easylist.to/easylist/easylist.txt. License: https://easylist.to/pages/licence.html. We use the GPL-3.0-or-later option. The GPL-3.0 text is included in LICENSE-HaGeZi.txt. The complete unmodified EasyList snapshot is easylist-source.txt. cosmetic.json is a modified derivative containing only generic simple CSS selectors; all selectors with a cosmetic exception anywhere in the source are omitted globally. Advanced selectors, procedural rules, scriptlets, network filters and domain-specific cosmetics are not compiled. The transformation source is ../scripts/build-filters.cjs. The derivative remains under GPL-3.0-or-later.
+
+provenance.json contains the snapshot hashes and build time. Domain lists update at runtime from the three fixed upstream GitHub URLs; the EasyList cosmetic snapshot updates only with extension releases. No downloaded code is executed.

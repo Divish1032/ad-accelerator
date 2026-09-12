@@ -1,0 +1,78 @@
+✖ malformed runtime messages are ignored without throwing (4.289875ms)
+✖ frame video reports have a bounded lifetime and per-tab count (4.722291ms)
+✖ strict recovery edits the displayed protected source on a blocked target page (268.649667ms)
+✖ site controls remain responsive while remote filter download is pending (446.337042ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 0
+ℹ fail 4
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 775.278875
+
+✖ failing tests:
+
+test at outputs/prime-ad-accelerator/tests/background.test.cjs:12:1
+✖ malformed runtime messages are ignored without throwing (4.289875ms)
+  TypeError: Cannot read properties of null (reading 'type')
+      at Object.message (evalmachine.<anonymous>:140:8)
+      at /Users/itachi/Documents/Codex/2026-09-06/iun/outputs/prime-ad-accelerator/tests/background.test.cjs:10:147
+      at new Promise (<anonymous>)
+      at Object.message (/Users/itachi/Documents/Codex/2026-09-06/iun/outputs/prime-ad-accelerator/tests/background.test.cjs:10:105)
+      at TestContext.<anonymous> (/Users/itachi/Documents/Codex/2026-09-06/iun/outputs/prime-ad-accelerator/tests/background.test.cjs:14:88)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1106:25)
+      at Test.start (node:internal/test_runner/test:1003:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:358:17)
+
+test at outputs/prime-ad-accelerator/tests/background.test.cjs:16:1
+✖ frame video reports have a bounded lifetime and per-tab count (4.722291ms)
+  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+  
+    assert.ok(r.run('reports.get(1).size')<=64)
+  
+      at TestContext.<anonymous> (/Users/itachi/Documents/Codex/2026-09-06/iun/outputs/prime-ad-accelerator/tests/background.test.cjs:19:9)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at outputs/prime-ad-accelerator/tests/background.test.cjs:23:1
+✖ strict recovery edits the displayed protected source on a blocked target page (268.649667ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  false !== true
+  
+      at TestContext.<anonymous> (/Users/itachi/Documents/Codex/2026-09-06/iun/outputs/prime-ad-accelerator/tests/background.test.cjs:26:9)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at outputs/prime-ad-accelerator/tests/background.test.cjs:33:1
+✖ site controls remain responsive while remote filter download is pending (446.337042ms)
+  AssertionError [ERR_ASSERTION]: a stalled remote download must not hold the policy queue
+  
+  false !== true
+  
+      at TestContext.<anonymous> (/Users/itachi/Documents/Codex/2026-09-06/iun/outputs/prime-ad-accelerator/tests/background.test.cjs:41:9)
+      at async Test.run (node:internal/test_runner/test:1113:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:788:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

@@ -1,0 +1,3 @@
+# Use 0.11.1 for the next submission
+
+The 0.11.0 extension ZIP in the earlier store kit is superseded. Use outputs/ad-accelerator-0.11.1.zip. It fixes Strict navigation trapping address-bar searches after visiting a protected site. No permissions changed; store screenshots still illustrate the same interface, with the previous patch version displayed. Update reviewer notes: Strict network rules apply to requests initiated by the configured source hostname, not arbitrary requests in that tab. Unrelated/opaque frame initiators are outside this narrow rule. 193 Node tests pass; native installed navigation confirmation remains required before submission. Public pages and data practices are unchanged.

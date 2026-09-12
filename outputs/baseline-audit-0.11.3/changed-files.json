@@ -1,0 +1,20 @@
+[
+  "README.md",
+  "background.js",
+  "element-picker.js",
+  "filter-core.js",
+  "help.html",
+  "licenses.html",
+  "manifest.json",
+  "popup.js",
+  "privacy-policy.html",
+  "privacy.html",
+  "site-compat.js",
+  "strict-navigation.js",
+  "tests/background.test.cjs",
+  "tests/filter.test.cjs",
+  "tests/picker-security.test.cjs",
+  "tests/security-policy.test.cjs",
+  "tests/site-compat.test.cjs",
+  "tests/strict.test.cjs"
+]

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en" class="popup-document"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ad Accelerator</title><link rel="stylesheet" href="popup.css"></head>
+<body><main>
+<header class="sticky-header"><span class="brand"><img src="icons/logo.svg" width="28" height="28" alt="">Ad Accelerator</span><span id="version" class="version"></span></header>
+<section class="site-card"><div class="site-heading"><p id="site" class="hostname">Connecting…</p></div><label class="row site-toggle"><span>Protection for this site<small id="site-scope">This hostname and its subdomains</small></span><input id="site-enabled" type="checkbox" role="switch" disabled></label><h1 id="headline" class="sr-only">Checking protection</h1><p id="status" role="status">Reading your settings…</p><button id="pause" class="secondary" disabled>Pause here for 10 minutes</button><p id="pause-note" class="hint">Pause applies to this site and its subdomains.</p><p id="cookie-pause-note" class="hint" hidden></p></section>
+<div id="message" role="status" class="message" hidden></div>
+<section class="video-card"><h2>Video ads <span class="scope">This platform / site</span></h2>
+<p id="video-pause-note" class="hint" hidden></p><label class="row"><span>Shorten video ads</span><input id="enabled" type="checkbox" role="switch" disabled></label>
+<label class="row"><span>Try skipping first<small>Use faster playback when skipping fails</small></span><input id="prefer-skip" type="checkbox" role="switch" disabled></label>
+<label class="row"><span>Ad playback speed</span><select id="speed" disabled><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option><option value="10">10×</option><option value="20">20× (Chrome: up to 16×)</option></select></label>
+<p class="hint">Normal video stays at your speed. Players may limit ad skipping or speed.</p></section>
+<section class="navigation-card"><label class="row"><span>Strict navigation<small id="strict-note">Restrict this site’s external destinations</small></span><input id="strict" type="checkbox" role="switch" disabled></label><p id="strict-status" class="hint" role="status"></p>
+<details id="strict-panel"><summary>Manage allowed destinations</summary>
+<p class="hint">May interrupt sign-ins and external players. Allow destinations below, then reload. Listed threats stay blocked.</p>
+<p id="strict-source" class="hint"></p><ul id="strict-attempts" class="events"></ul>
+<label for="destination" class="hint">Allow an exact destination hostname</label><div class="destination-row"><input id="destination" placeholder="accounts.example.com" autocomplete="off" spellcheck="false"><button id="allow-destination" disabled>Allow</button></div><ul id="allowed-destinations" class="rule-list"></ul>
+<button id="strict-pause" class="secondary" disabled>Pause strict mode for 10 minutes</button>
+</details></section>
+<div class="quick-actions"><button id="pick" disabled>Hide an element</button><button id="recover" disabled>Page not working?</button></div>
+<details id="recovery" hidden><summary>Page recovery <span class="scope">10 minutes · This site</span></summary><p class="hint">Try one option, then reload the page. Each pause ends automatically. Applies to this hostname and its subdomains.</p>
+<button class="secondary" data-recovery="cosmetics">Show automatic ad elements</button>
+<button class="secondary" data-recovery="custom">Show my hidden elements</button>
+<button class="secondary" data-recovery="video">Pause video assistance</button>
+<button class="secondary" data-recovery="popups">Allow popup tabs</button>
+<button class="secondary" data-recovery="network">Pause network filters</button>
+<p class="hint">Pausing network filters also pauses listed threat blocking and popup cleanup here.</p>
+<p id="recovery-status" role="status" class="hint"></p><button id="recovery-reset" class="secondary" disabled>End recovery pauses</button><button id="reload" class="secondary" disabled>Reload this page</button></details>
+<a id="privacy-link" class="privacy-link" href="privacy.html" target="_blank" rel="noopener">Privacy controls <span>Tracking links, cookies &amp; location ↗</span></a>
+
+<details id="hidden-panel"><summary>My hidden elements <span id="hidden-count" class="scope">This hostname</span></summary><p class="hint">Select a box, then confirm. Saved for this hostname. Undo any selection below.</p><ul id="hidden-rules" class="rule-list"></ul><p class="hint">Embedded frames can be selected as a whole; their inner elements cannot. Recognized players and forms are protected. Site layout changes may require a new selection.</p></details>
+<details><summary>Protection <span class="scope">All websites</span></summary>
+<label class="row"><span>Network filters<small>Listed ads, trackers and threats</small></span><input id="network" type="checkbox" role="switch" disabled></label>
+<label class="row"><span>Hide ad elements<small>Remove common banners and empty ad spaces</small></span><input id="cosmetics" type="checkbox" role="switch" disabled></label>
+<label class="row"><span>Close blocked popups<small id="popup-note">Includes redirects from newly opened blank tabs</small></span><input id="popups" type="checkbox" role="switch" disabled></label>
+</details>
+
+<details id="activity"><summary>What happened?</summary><p id="video-status" class="activity-text">Checking video…</p><ul id="events" class="events"></ul><p class="hint">Popup activity lasts for this browser worker session. Request-by-request blocking logs are not collected. Same-tab redirects are not prevented by popup cleanup.</p><a href="diagnostics.html" target="_blank" rel="noopener">Check installed filters ↗</a></details>
+<details><summary>Settings &amp; filters</summary>
+<label class="row"><span>Protection on all websites</span><input id="protection" type="checkbox" role="switch" disabled></label>
+<label class="row"><span>Update lists daily</span><input id="auto-update" type="checkbox" role="switch" disabled></label>
+<p id="filters" class="hint"></p><button id="update" class="secondary" disabled>Update filters</button></details>
+<a id="adaptive-link" href="adaptive.html" target="_blank" rel="noopener">Adaptive protection ↗</a>
+<footer><a href="help.html" target="_blank" rel="noopener">Help &amp; privacy ↗</a><span>Free to use · No account needed</span><p>Reload after protection changes. Some ads and redirects may remain.</p></footer>
+</main><script src="sites.js"></script><script src="filter-core.js"></script><script src="popup.js"></script></body></html>

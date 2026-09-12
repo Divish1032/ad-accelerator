@@ -1,0 +1,282 @@
+--- 0.11.2/README.md
++++ 0.11.3/README.md
+@@ -1,4 +1,12 @@
+-# Ad Accelerator 0.11.2 — Chrome release candidate
++# Ad Accelerator 0.11.3 — audited development baseline
++
++## Baseline hardening in 0.11.3
++
++An audit of the exact 0.11.2 upload archive reproduced four missed failures: slow list downloads held the settings queue, Strict recovery could target the blocked destination rather than the displayed source, malformed messages threw uncaught errors, and frame reports grew without a bound. All four are fixed with regression coverage. Downloads now happen outside the policy queue and commit atomically without replacing pause or privacy rules. Concurrent updates share one download. Unexpected HTTP redirects fail and retain existing filters.
++
++The element picker now uses a closed shadow root and requires trusted user events for selection, save and cancellation. Privileged policy actions accept only the exact popup page; privacy/deletion and adaptive controls retain their separate page restrictions. Explicit extension CSP permits packaged scripts and limits fetch connections to packaged resources and the existing GitHub list origin. Strict destination regexes are preflighted before replacing working rules. Null/corrupt top-level settings safely normalize, and detached compatibility elements release stored references after restoring their styles. Strict status now explains suspension under network-off settings; recovery reset handles a retained protected source.
++
++No new permissions, telemetry, website adapters, remote code or data-deletion behavior. The 499-entry research catalog is a discovery backlog, not a compatibility claim. Installed Chrome native API, real-ad, upgrade/restart and multi-extension checks remain release gates. This is a hardened development baseline, not a zero-bug or universal-safety certification. See the workspace audit and START-HERE handoff before platform expansion.
+ 
+ ## Privacy fixes in 0.11.2
+ 
+--- 0.11.2/background.js
++++ 0.11.3/background.js
+@@ -52,27 +52,38 @@
+  await chrome.alarms.create('site-pause',{when:Date.now()+30000}).catch(console.error);
+ }
+ async function download(url){
+-  const response=await fetch(url,{credentials:'omit',cache:'no-store',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(20000)});
++  const response=await fetch(url,{credentials:'omit',cache:'no-store',redirect:'error',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(20000)});
+   if(!response.ok)throw Error('List download failed ('+response.status+')');
+   const reader=response.body.getReader();let length=0,text='';const decoder=new TextDecoder();
+   while(true){const {done,value}=await reader.read();if(done)break;length+=value.byteLength;if(length>25000000){await reader.cancel();throw Error('List download too large');}text+=decoder.decode(value,{stream:true});}
+   return text+decoder.decode();
+ }
+-async function installLists(remote){
++async function prepareLists(remote){
+   const groups=[];const sources=[];
+   for(const source of FilterCore.SOURCES){
+     const text=await download(remote?source.url:chrome.runtime.getURL('filters/'+source.key+'.txt'));
+     const domains=FilterCore.parse(text);groups.push(domains);
+     sources.push({name:source.name,count:domains.length,version:text.match(/^# Version: (.+)$/m)?.[1]||'unknown'});
+   }
+-  const rules=FilterCore.compile(groups),old=await chrome.declarativeNetRequest.getDynamicRules();
++  return {rules:FilterCore.compile(groups),sources,domains:new Set(groups.flat()).size,source:remote?'download':'bundled'};
++}
++async function commitLists({rules,sources,domains,source}){
++  const old=await chrome.declarativeNetRequest.getDynamicRules();
+   await chrome.declarativeNetRequest.updateDynamicRules({removeRuleIds:old.filter(r=>r.id>=100).map(r=>r.id),addRules:rules});
+-  try{await chrome.storage.local.set({filterStatus:{installedAt:Date.now(),source:remote?'download':'bundled',domains:new Set(groups.flat()).size,rules:rules.length,sources,error:null}});}
++  try{await chrome.storage.local.set({filterStatus:{installedAt:Date.now(),source,domains,rules:rules.length,sources,error:null}});}
+   catch(e){await chrome.declarativeNetRequest.updateDynamicRules({removeRuleIds:rules.map(r=>r.id),addRules:old.filter(r=>r.id>=100)});throw e;}
+ }
+-async function update(){
+-  try{await installLists(true);}
+-  catch(e){const {filterStatus={}}=await chrome.storage.local.get('filterStatus');await chrome.storage.local.set({filterStatus:{...filterStatus,error:'Update failed; previous filters retained. '+e.message}});throw e;}
++async function installLists(remote){await commitLists(await prepareLists(remote));}
++let updateFlight=null;
++function update(){
++  // Downloads must not hold the policy queue: a slow/offline list host must
++  // never prevent the user from pausing a broken site. Only commit is serialized.
++  if(updateFlight)return updateFlight;
++  updateFlight=(async()=>{
++    try{const prepared=await prepareLists(true);await serialized(()=>commitLists(prepared));}
++    catch(e){await serialized(async()=>{const {filterStatus={}}=await chrome.storage.local.get('filterStatus');await chrome.storage.local.set({filterStatus:{...filterStatus,error:'Update failed; previous filters retained. '+e.message}});});throw e;}
++  })().finally(()=>{updateFlight=null;});
++  return updateFlight;
+ }
+ async function initialize(){
+   const c=await readConfig();await applyPolicy(c);await schedulePauses(c);
+@@ -91,8 +102,9 @@
+ }
+ chrome.runtime.onInstalled.addListener(()=>serialized(initialize).catch(console.error));
+ chrome.runtime.onStartup.addListener(()=>serialized(initialize).catch(console.error));
+-chrome.alarms.onAlarm.addListener(a=>{if(a.name==='adaptive-expiry')serialized(async()=>{await chrome.storage.local.set({adaptive:await adaptive.state()});adaptive.prune();}).catch(console.error);if(a.name==='site-pause')serialized(expirePauses).catch(retryPauseExpiry);if(a.name==='filter-update')serialized(async()=>{if((await readConfig()).autoUpdate)await update();}).catch(console.error);});
++chrome.alarms.onAlarm.addListener(a=>{if(a.name==='adaptive-expiry')serialized(async()=>{await chrome.storage.local.set({adaptive:await adaptive.state()});adaptive.prune();}).catch(console.error);if(a.name==='site-pause')serialized(expirePauses).catch(retryPauseExpiry);if(a.name==='filter-update')serialized(readConfig).then(c=>c.autoUpdate?update():undefined).catch(console.error);});
+ chrome.runtime.onMessage.addListener((m,sender,reply)=>{
++  if(!m||typeof m!=='object'||Array.isArray(m)||typeof m.type!=='string')return;
+   if(typeof m?.type==='string'&&m.type.startsWith('adaptive-')){
+    if(sender.url?.split('?')[0]!==chrome.runtime.getURL('adaptive.html'))return;
+    serialized(async()=>{
+@@ -142,6 +154,9 @@
+   }
+   if(m.type==='video-report'&&sender.tab){
+     const frames=reports.get(sender.tab.id)||new Map();
++    for(const [id,r]of frames)if(Date.now()-r.at>=10000)frames.delete(id);
++    if(!frames.has(sender.frameId)&&frames.size>=64)frames.delete(frames.keys().next().value);
++    if(!reports.has(sender.tab.id)&&reports.size>=512)reports.delete(reports.keys().next().value);
+     frames.set(sender.frameId,{text:String(m.text).slice(0,150),videoFound:!!m.videoFound,ad:!!m.ad,at:Date.now()});reports.set(sender.tab.id,frames);reply({ok:true});return;
+   }
+   if(m.type==='cosmetic-rules'&&sender.tab){
+@@ -170,11 +185,12 @@
+     })().catch(()=>reply({enabled:false,cosmetics:false,videoSettings:{enabled:false}}));return true;
+   }
+   // Only our extension pages may change filtering or request list downloads.
+-  if(!sender.url?.startsWith(chrome.runtime.getURL(''))||sender.tab)return;
++  if(sender.url?.split(/[?#]/)[0]!==chrome.runtime.getURL('popup.html')||sender.tab)return;
+   if(!['protection-status','protection-save','filters-update','site-pause','site-resume','site-set','recovery-set','recovery-reset','element-pick','element-remove','strict-set','strict-allow','strict-remove'].includes(m.type))return;
++  if(m.type==='filters-update'){update().then(()=>reply({ok:true}),e=>reply({ok:false,error:e.message}));return true;}
+   serialized(async()=>{
+     if(['strict-set','strict-allow','strict-remove'].includes(m.type)){
+-      const source=await chrome.tabs.get(m.tabId),h=FilterCore.host(source.url)||await pageHost(m.tabId,source.url);if(!FilterCore.domain(h))throw Error('Strict navigation needs a website hostname, not a local address.');
++      const source=await chrome.tabs.get(m.tabId),h=await pageHost(m.tabId,source.url);if(!FilterCore.domain(h))throw Error('Strict navigation needs a website hostname, not a local address.');
+       const old=await readConfig(),c=FilterCore.config(old);
+       if(m.type==='strict-set'){if(m.enabled){if(!c.strict[h]&&Object.keys(c.strict).length>=50)throw Error('Maximum 50 strict sites.');c.strict[h]=c.strict[h]||[];}else delete c.strict[h];}
+       else {const d=typeof m.destination==='string'?m.destination.trim().toLowerCase():'';if(!FilterCore.domain(d)||!c.strict[h])throw Error('Enter a hostname and enable strict protection first.');
+@@ -184,7 +200,7 @@
+       await applyPolicy(c);try{await chrome.storage.local.set({protection:c});}catch(e){await applyPolicy(old);throw e;}
+     }
+     if(['recovery-set','recovery-reset','element-pick','element-remove'].includes(m.type)){
+-      const source=await chrome.tabs.get(m.tabId),h=FilterCore.host(source.url)||await pageHost(m.tabId,source.url);
++      const source=await chrome.tabs.get(m.tabId),h=m.feature==='strict'?await pageHost(m.tabId,source.url):FilterCore.host(source.url)||await pageHost(m.tabId,source.url);
+       if(!h)throw Error('Open a website first.');
+       if(m.type==='element-pick'){
+         const c=await readConfig();if(!FilterCore.enabledFor(c,h)||FilterCore.recovering(c,h,'custom'))throw Error('Resume protection and hidden elements first.');
+@@ -199,7 +215,11 @@
+       }
+       if(m.type.startsWith('recovery-')){
+         const old=await readConfig(),c=FilterCore.config(old);
+-        if(m.type==='recovery-reset'){for(const d of Object.keys(c.recovery))if(h===d||h.endsWith('.'+d))delete c.recovery[d];}
++        if(m.type==='recovery-reset'){
++          for(const d of Object.keys(c.recovery))if(h===d||h.endsWith('.'+d))delete c.recovery[d];
++          const retained=await strictNavigation.source(m.tabId);
++          if(retained&&retained!==h)for(const d of Object.keys(c.recovery))if(retained===d||retained.endsWith('.'+d)){delete c.recovery[d].strict;if(!Object.keys(c.recovery[d]).length)delete c.recovery[d];}
++        }
+         else {if(!['network','cosmetics','popups','video','custom','strict'].includes(m.feature))throw Error('Unknown recovery option.');if(!c.recovery[h]&&Object.keys(c.recovery).length>=100)throw Error('Maximum 100 sites in recovery.');c.recovery[h]={...c.recovery[h],[m.feature]:Date.now()+600000};}
+         await applyPolicy(c);try{await chrome.storage.local.set({protection:c});await schedulePauses(c);}catch(e){await applyPolicy(old);await chrome.storage.local.set({protection:old});await schedulePauses(old);throw e;}
+       }
+@@ -227,7 +247,6 @@
+       const old=await readConfig(),c=FilterCore.config({...old,...m.patch});await applyPolicy(c);
+       try{await chrome.storage.local.set({protection:c});await schedulePauses(c);}catch(e){await applyPolicy(old);await chrome.storage.local.set({protection:old});await schedulePauses(old);throw e;}
+     }
+-    if(m.type==='filters-update')await update();
+     const c=await readConfig(),{filterStatus={}}=await chrome.storage.local.get('filterStatus');
+     const rules=await chrome.declarativeNetRequest.getDynamicRules();
+     const frames=[...(reports.get(m.tabId)?.values()||[])].filter(r=>Date.now()-r.at<10000).sort((a,b)=>(Number(b.ad)*2+Number(b.videoFound))-(Number(a.ad)*2+Number(a.videoFound)));
+--- 0.11.2/element-picker.js
++++ 0.11.3/element-picker.js
+@@ -6,25 +6,31 @@
+   start(){
+    this.stop();const doc=this.doc,win=doc.defaultView;
+    const host=doc.createElement('div');host.style.cssText='all:initial!important;position:fixed!important;inset:0!important;z-index:2147483647!important;pointer-events:none!important;';
+-   const shadow=host.attachShadow({mode:'open'});
++   const shadow=host.attachShadow({mode:'closed'});
+    shadow.innerHTML=`<style>:host{color-scheme:dark}*{box-sizing:border-box}.shield{position:fixed;inset:0;pointer-events:auto;cursor:crosshair}.outline{position:fixed;border:2px solid #a3ebc8;background:#84d4b422;pointer-events:none;display:none}.panel{position:fixed;bottom:20px;right:20px;width:min(340px,calc(100vw - 40px));padding:18px;border:1px solid #526c60;border-radius:14px;background:#111718;color:#eef3f5;font:14px/1.5 system-ui;box-shadow:0 8px 30px #0008;pointer-events:auto}h2{font-size:17px;margin:0 0 6px}p{color:#bcc9c5;font-size:12px;margin:6px 0 14px}button{font:inherit;background:#23392e;color:#e8f4ee;border:1px solid #526c60;border-radius:8px;padding:8px 12px;margin:3px;cursor:pointer}button:disabled{opacity:.4}button:focus-visible{outline:2px solid #a3ebc8}.primary{background:#84d4b4;color:#153e2e}</style><div class="shield"></div><div class="outline"></div><section class="panel" role="dialog" aria-label="Hide an element"><h2>Hide an element</h2><p role="status">Point to a box, then click to select it. Escape cancels. Embedded frames can only be selected as a whole.</p><button class="primary" id="save" disabled>Hide on this site</button><button id="again" disabled>Pick another</button><button id="cancel">Cancel</button></section>`;
+    doc.documentElement.append(host);
+    const panel=shadow.querySelector('.panel'),outline=shadow.querySelector('.outline'),status=shadow.querySelector('p'),save=shadow.querySelector('#save'),again=shadow.querySelector('#again');
+    let candidate=null,rule=null,selected=false,pending=false,stopped=false;
+    const paint=()=>{if(!candidate?.isConnected){outline.style.display='none';return;}const r=candidate.getBoundingClientRect();outline.style.cssText=`display:block;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px`;};
+-   const move=e=>{if(selected||pending||e.composedPath().includes(panel))return;candidate=doc.elementsFromPoint(e.clientX,e.clientY).find(el=>el!==host&&!host.contains(el));rule=ElementRules.describe(candidate,doc);paint();status.textContent=rule?'Click to select this '+rule.tag+' element.':'Choose a smaller box. Page roots, forms and recognized players are protected.';};
++   const move=e=>{if(!e.isTrusted||selected||pending||e.composedPath().includes(host))return;candidate=doc.elementsFromPoint(e.clientX,e.clientY).find(el=>el!==host&&!host.contains(el));rule=ElementRules.describe(candidate,doc);paint();status.textContent=rule?'Click to select this '+rule.tag+' element.':'Choose a smaller box. Page roots, forms and recognized players are protected.';};
+    const block=e=>{
+-    if(e.composedPath().includes(panel))return;
++    // Closed shadow events are retargeted to host outside the picker. Handle
++    // selection on the shield itself; page-dispatched clicks are never consent.
++    if(!e.isTrusted||e.composedPath().includes(host))return;
+     e.preventDefault();e.stopImmediatePropagation();
+     if(e.type==='click'&&!pending&&!selected){candidate=doc.elementsFromPoint(e.clientX,e.clientY).find(el=>el!==host&&!host.contains(el));rule=ElementRules.describe(candidate,doc);selected=!!rule;save.disabled=!selected;again.disabled=!selected;status.textContent=selected?'Selected '+rule.tag+'. Confirm to hide it on this hostname. You can undo in the extension.':'This element cannot be hidden. Choose a smaller box.';paint();}
+    };
+-   const key=e=>{if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();this.stop();}};
++   const key=e=>{if(e.isTrusted&&e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();this.stop();}};
+    const types=['pointerdown','pointerup','mousedown','mouseup','click','auxclick','dblclick','contextmenu'];
+    for(const type of types)win.addEventListener(type,block,true);
+    win.addEventListener('mousemove',move,true);win.addEventListener('keydown',key,true);win.addEventListener('scroll',paint,true);win.addEventListener('resize',paint);
+-   shadow.querySelector('#cancel').onclick=()=>this.stop();
+-   again.onclick=()=>{selected=false;candidate=null;rule=null;save.disabled=true;again.disabled=true;outline.style.display='none';status.textContent='Point to another box and click to select it.';};
+-   save.onclick=async()=>{if(!rule||pending)return;pending=true;save.disabled=true;again.disabled=true;
++   // Forward trusted shield events without exposing the closed panel to page scripts.
++   const shield=shadow.querySelector('.shield');
++   shield.addEventListener('mousemove',e=>move({isTrusted:e.isTrusted,clientX:e.clientX,clientY:e.clientY,composedPath:()=>[]}));
++   for(const type of types)shield.addEventListener(type,e=>block({isTrusted:e.isTrusted,type:e.type,clientX:e.clientX,clientY:e.clientY,composedPath:()=>[],preventDefault:()=>e.preventDefault(),stopImmediatePropagation:()=>e.stopImmediatePropagation()}));
++   shadow.querySelector('#cancel').onclick=e=>{if(e.isTrusted)this.stop();};
++   again.onclick=e=>{if(!e.isTrusted)return;selected=false;candidate=null;rule=null;save.disabled=true;again.disabled=true;outline.style.display='none';status.textContent='Point to another box and click to select it.';};
++   save.onclick=async e=>{if(!e.isTrusted||!rule||pending)return;pending=true;save.disabled=true;again.disabled=true;
+     try{const r=await this.send({type:'element-add',rule});if(!r?.ok)throw Error(r?.error||'Unable to save');if(!stopped)this.stop();}
+     catch(e){if(!stopped){status.textContent='Could not save. '+e.message;pending=false;save.disabled=false;again.disabled=false;}}
+    };
+--- 0.11.2/filter-core.js
++++ 0.11.3/filter-core.js
+@@ -13,7 +13,7 @@
+   function recovery(saved={}){return Object.fromEntries(Object.entries(saved||{}).filter(([h])=>siteHost(h)).slice(0,100).map(([h,v])=>[h,Object.fromEntries(Object.entries(v||{}).filter(([k,t])=>["network","cosmetics","popups","video","custom","strict"].includes(k)&&Number.isFinite(t)&&t>Date.now()))]).filter(([,v])=>Object.keys(v).length));}
+   function recovering(c,h,feature){return !!h&&Object.entries(c.recovery||{}).some(([d,v])=>(h===d||h.endsWith("."+d))&&v[feature]>Date.now());}
+  function strictSites(raw){return Object.fromEntries(Object.entries(raw||{}).filter(([h,v])=>domain(h)&&Array.isArray(v)).slice(0,50).map(([h,v])=>[h,[...new Set(v.filter(d=>domain(d)))].slice(0,20)]));}
+-  function config(saved={}){return {strict:strictSites(saved.strict),recovery:recovery(saved.recovery),enabled:saved.enabled!==false,cosmetics:saved.cosmetics!==false,autoUpdate:saved.autoUpdate!==false,network:saved.network!==false,popups:saved.popups!==false,pauses:Object.fromEntries(Object.entries(saved.pauses||{}).filter(([h,t])=>siteHost(h)&&Number.isFinite(t)&&t>Date.now()).slice(0,100)),disabledSites:[...new Set((Array.isArray(saved.disabledSites)?saved.disabledSites:[]).filter(siteHost))].slice(0,100)};}
++  function config(saved={}){saved=saved&&typeof saved==='object'&&!Array.isArray(saved)?saved:{};return {strict:strictSites(saved.strict),recovery:recovery(saved.recovery),enabled:saved.enabled!==false,cosmetics:saved.cosmetics!==false,autoUpdate:saved.autoUpdate!==false,network:saved.network!==false,popups:saved.popups!==false,pauses:Object.fromEntries(Object.entries(saved.pauses||{}).filter(([h,t])=>siteHost(h)&&Number.isFinite(t)&&t>Date.now()).slice(0,100)),disabledSites:[...new Set((Array.isArray(saved.disabledSites)?saved.disabledSites:[]).filter(siteHost))].slice(0,100)};}
+   function enabledFor(c,h){return !!h&&c.enabled&&![...c.disabledSites,...Object.keys(c.pauses||{})].some(d=>h===d||h.endsWith('.'+d));}
+   function parse(text){
+     if(typeof text!=='string'||text.length>25000000)throw Error('Filter download too large');
+--- 0.11.2/help.html
++++ 0.11.3/help.html
+@@ -1,4 +1,4 @@
+-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Help & support · Ad Accelerator</title><link rel="stylesheet" href="popup.css"><link rel="stylesheet" href="help.css"></head><body><main><header><span class="brand"><img src="icons/logo.svg" width="32" height="32" alt="">Ad Accelerator</span><span class="version">0.11.1</span></header><nav><a href="help.html">Help</a> · <a href="privacy-policy.html">Privacy policy</a> · <a href="licenses.html">Credits</a></nav><h1>Help & support</h1><p>Ad Accelerator is a free Chrome extension by Divyansh Kumar. It blocks listed ad and tracker destinations, hides common ad boxes, and tries to shorten detected video ads.</p><aside>The Chrome Web Store release is being prepared. There is no public store installation link yet. This extension requires Chrome 145 or later.</aside>
++<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Help & support · Ad Accelerator</title><link rel="stylesheet" href="popup.css"><link rel="stylesheet" href="help.css"></head><body><main><header><span class="brand"><img src="icons/logo.svg" width="32" height="32" alt="">Ad Accelerator</span><span class="version">0.11.3</span></header><nav><a href="help.html">Help</a> · <a href="privacy-policy.html">Privacy policy</a> · <a href="licenses.html">Credits</a></nav><h1>Help & support</h1><p>Ad Accelerator is a free Chrome extension by Divyansh Kumar. It blocks listed ad and tracker destinations, hides common ad boxes, and tries to shorten detected video ads.</p><aside>The Chrome Web Store release is being prepared. There is no public store installation link yet. This extension requires Chrome 145 or later.</aside>
+ <h2>Your everyday controls</h2><ol><li>Open a website and select Ad Accelerator from Chrome’s extensions menu. Pin it for quicker access.</li><li>Use <strong>Protection for this site</strong> to keep protection on or off for the current hostname and its subdomains. The choice is remembered.</li><li>Use <strong>Pause here for 10 minutes</strong> for a temporary break. Previously enabled site protections return when the timer ends. Reload to retry requests that were already blocked.</li><li>Under <strong>Video ads</strong>, choose a speed and whether to try skipping first. Normal playback speed is restored when the detected ad ends. The 20× option is a request; Chrome generally caps playback at 16× and players may allow less.</li></ol>
+ <h2>If a page stops working</h2><p>Pause protection for that site and reload. For a smaller change, choose <strong>Page not working?</strong> and pause just the affected feature. Undo manually hidden boxes under <strong>My hidden elements</strong>.</p><p><strong>Strict navigation</strong> is optional. It restricts external destinations on a chosen site and can interrupt sign-ins or embedded players. Allow the exact destination or turn strict mode off, then reload.</p>
+ <h2>What pausing means</h2><p>A full site pause suspends network filtering, page hiding, video assistance, popup cleanup, adaptive protection, strict navigation, tracking-link cleanup, and our location restrictions for matching sites. Saved preferences stay in place.</p><p>If you enabled our third-party cookie control, any full site pause or lasting exception also suspends that override <strong>across Chrome</strong>. It returns only after all full site pauses and exceptions end, if still enabled. Chrome’s own restrictions continue to apply. Filter-list updates have their own setting; pausing a site does not delete data or reverse prior deletions.</p>
+--- 0.11.2/licenses.html
++++ 0.11.3/licenses.html
+@@ -1 +1 @@
+-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Credits & licenses · Ad Accelerator</title><link rel="stylesheet" href="popup.css"><link rel="stylesheet" href="help.css"></head><body><main><header><span class="brand"><img src="icons/logo.svg" width="32" height="32" alt="">Ad Accelerator</span><span class="version">0.11.1</span></header><nav><a href="help.html">Help</a> · <a href="privacy-policy.html">Privacy policy</a> · <a href="licenses.html">Credits</a></nav><h1>Credits & licenses</h1><p>Ad Accelerator is made by Divyansh Kumar and is free to use. Its logo is an original geometric “A” and forward arrow created for this extension.</p><h2>Filter data</h2><p><a href="https://github.com/hagezi/dns-blocklists">HaGeZi’s DNS blocklists</a> provide Multi Light, Threat Intelligence Mini and Popup Ads domain data, distributed under GPL-3.0. Original source snapshots, attribution, hashes and license text are included in the extension package.</p><p><a href="https://easylist.to/">EasyList</a>, by the EasyList authors, supplies bundled cosmetic filter data. We use the GPL-3.0-or-later licensing option. The transformed subset, complete source snapshot and transformation script are included in the package. It includes generic simple CSS rules, not the full EasyList feature set.</p><p>See <code>filters/NOTICE.md</code>, <code>filters/LICENSE-HaGeZi.txt</code>, <code>filters/provenance.json</code>, and <code>scripts/build-filters.cjs</code> in the extension download for the corresponding notices, source and transformation details.</p><h2>Independent software</h2><p>Ad Accelerator is not affiliated with Google, YouTube, Amazon, Prime Video, Hotstar, or other websites it can operate on. Their names identify compatibility, not endorsement. Availability and behavior can change.</p><p>Questions: <a href="mailto:divyansh1032@gmail.com">divyansh1032@gmail.com</a>.</p></main></body></html>+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Credits & licenses · Ad Accelerator</title><link rel="stylesheet" href="popup.css"><link rel="stylesheet" href="help.css"></head><body><main><header><span class="brand"><img src="icons/logo.svg" width="32" height="32" alt="">Ad Accelerator</span><span class="version">0.11.3</span></header><nav><a href="help.html">Help</a> · <a href="privacy-policy.html">Privacy policy</a> · <a href="licenses.html">Credits</a></nav><h1>Credits & licenses</h1><p>Ad Accelerator is made by Divyansh Kumar and is free to use. Its logo is an original geometric “A” and forward arrow created for this extension.</p><h2>Filter data</h2><p><a href="https://github.com/hagezi/dns-blocklists">HaGeZi’s DNS blocklists</a> provide Multi Light, Threat Intelligence Mini and Popup Ads domain data, distributed under GPL-3.0. Original source snapshots, attribution, hashes and license text are included in the extension package.</p><p><a href="https://easylist.to/">EasyList</a>, by the EasyList authors, supplies bundled cosmetic filter data. We use the GPL-3.0-or-later licensing option. The transformed subset, complete source snapshot and transformation script are included in the package. It includes generic simple CSS rules, not the full EasyList feature set.</p><p>See <code>filters/NOTICE.md</code>, <code>filters/LICENSE-HaGeZi.txt</code>, <code>filters/provenance.json</code>, and <code>scripts/build-filters.cjs</code> in the extension download for the corresponding notices, source and transformation details.</p><h2>Independent software</h2><p>Ad Accelerator is not affiliated with Google, YouTube, Amazon, Prime Video, Hotstar, or other websites it can operate on. Their names identify compatibility, not endorsement. Availability and behavior can change.</p><p>Questions: <a href="mailto:divyansh1032@gmail.com">divyansh1032@gmail.com</a>.</p></main></body></html>--- 0.11.2/manifest.json
++++ 0.11.3/manifest.json
+@@ -1,7 +1,7 @@
+ {
+   "manifest_version": 3,
+   "name": "Ad Accelerator",
+-  "version": "0.11.2",
++  "version": "0.11.3",
+   "description": "Reduce ads and trackers, shorten detected video ads, and control protection for each website. Free to use.",
+   "permissions": [
+     "storage",
+@@ -48,6 +48,9 @@
+   "background": {
+     "service_worker": "background.js"
+   },
++  "content_security_policy": {
++    "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; connect-src 'self' https://raw.githubusercontent.com;"
++  },
+   "optional_permissions": [
+     "privacy",
+     "contentSettings",
+--- 0.11.2/popup.js
++++ 0.11.3/popup.js
+@@ -32,7 +32,7 @@
+    $('enabled').checked=s.enabled;$('prefer-skip').checked=data['site.'+key]?.preferSkip!==false;$('speed').value=String(s.speed);
+    $('video-status').textContent=r.videoText;
+    const recoveryNames={cosmetics:'Automatic ad elements',custom:'My hidden elements',strict:'Strict navigation',video:'Video assistance',popups:'Popup cleanup',network:'Network filters'};
+-   const recovering=Object.keys(recoveryNames).filter(k=>FilterCore.recovering(config,hostname,k));
++   const recovering=Object.keys(recoveryNames).filter(k=>FilterCore.recovering(config,k==='strict'?strictHost:hostname,k));
+    $('recovery-status').textContent=recovering.length?'Temporarily paused: '+recovering.map(k=>recoveryNames[k]).join(', ')+'.':'No recovery pauses active.';
+    $('hidden-count').textContent=(r.hiddenElements||[]).length+' saved';
+    // Do not replace focused Undo controls on every status poll.
+@@ -52,7 +52,7 @@
+    document.querySelector('.site-card').dataset.active=String(active);
+    $('cookie-pause-note').hidden=!r.cookieConfigured;
+    $('cookie-pause-note').textContent=r.cookiesSuspended?'Our cookie override is suspended across Chrome while any full-site pause or exception remains. Your Chrome settings apply.':'Pausing or disabling a site also suspends our cookie override across Chrome.';
+-   $('strict-status').textContent=!strictOn?'Optional · May affect external links.':!active?'Saved as on · Suspended while this site is off.':FilterCore.recovering(config,strictHost,'strict')?'Saved as on · Temporarily paused.':'On · External links may need an allowed destination.';
++   $('strict-status').textContent=!strictOn?'Optional · May affect external links.':!active?'Saved as on · Suspended while this site is off.':!config.network||FilterCore.recovering(config,strictHost,'network')?'Saved as on · Suspended while network filtering is paused.':FilterCore.recovering(config,strictHost,'strict')?'Saved as on · Temporarily paused.':'On · External links may need an allowed destination.';
+    $('popup-note').textContent=config.network?'New tabs targeting listed domains':'Requires Network filters to be on';
+    $('filters').textContent=(f.domains?f.domains.toLocaleString()+' listed domains · '+new Date(f.installedAt).toLocaleDateString()+'. ':'')+(f.error||'');
+    $('events').replaceChildren();
+--- 0.11.2/privacy-policy.html
++++ 0.11.3/privacy-policy.html
+@@ -1,4 +1,4 @@
+-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Privacy policy · Ad Accelerator</title><link rel="stylesheet" href="popup.css"><link rel="stylesheet" href="help.css"></head><body><main><header><span class="brand"><img src="icons/logo.svg" width="32" height="32" alt="">Ad Accelerator</span><span class="version">0.11.1</span></header><nav><a href="help.html">Help</a> · <a href="privacy-policy.html">Privacy policy</a> · <a href="licenses.html">Credits</a></nav><h1>Privacy policy</h1><p class="updated">Effective September 6, 2026 · Ad Accelerator 0.11.1<br/>Developer: Divyansh Kumar · <a href="mailto:divyansh1032@gmail.com">divyansh1032@gmail.com</a></p><p>Ad Accelerator processes information in your browser to reduce ads, tracking, and unwanted popup navigation. The extension has no account system, analytics service, advertising, or developer-operated data collection server. It does not sell your data.</p>
++<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Privacy policy · Ad Accelerator</title><link rel="stylesheet" href="popup.css"><link rel="stylesheet" href="help.css"></head><body><main><header><span class="brand"><img src="icons/logo.svg" width="32" height="32" alt="">Ad Accelerator</span><span class="version">0.11.3</span></header><nav><a href="help.html">Help</a> · <a href="privacy-policy.html">Privacy policy</a> · <a href="licenses.html">Credits</a></nav><h1>Privacy policy</h1><p class="updated">Effective September 6, 2026 · Ad Accelerator 0.11.3<br/>Developer: Divyansh Kumar · <a href="mailto:divyansh1032@gmail.com">divyansh1032@gmail.com</a></p><p>Ad Accelerator processes information in your browser to reduce ads, tracking, and unwanted popup navigation. The extension has no account system, analytics service, advertising, or developer-operated data collection server. It does not sell your data.</p>
+ <h2>Information used in your browser</h2><p>The extension inspects website addresses, navigation events, links, visible page elements, and video-player state to apply protection. It can change page presentation and detected ad playback. It does not read passwords, payment fields, cookie values, or location coordinates. It does not request Chrome’s browsing-history permission.</p><p>Local extension storage contains settings, site exceptions, temporary pause times, strict-mode destinations, optional location-blocked origins, custom CSS selectors for elements you choose to hide, filter lists, and filter-update status. These settings are not synchronized or sent to the developer.</p>
+ <h2>Automatic learning and temporary activity</h2><p>Adaptive protection stores up to 100 candidate or active rules and up to 100 temporary allow pairs locally. A rule contains source, destination and evidence hostnames, counts, timestamps and expiry. It does not persist full browsing URLs, query strings or page text. Rules expire 24 hours after first evidence; allow pairs expire after 24 hours. Expired rules are not enforced and are pruned periodically.</p><p>Pending popup chains may contain a source URL and tab identifiers in bounded worker memory for up to 10 seconds. Short-lived popup activity and navigation attempts are kept in memory or session storage, not uploaded. Private windows are excluded from adaptive learning. While you use the element picker, a source URL and a tab identifier can remain in session storage for up to five minutes to validate your selection.</p>
+ <h2>Network connections</h2><p>The extension downloads three domain lists from HaGeZi’s public GitHub repository when you update filters or when enabled daily updates run. Those requests contain no browsing history, learned rules, cookie values, or page contents. The list host receives ordinary connection metadata, including your IP address. Downloads omit credentials and referrers. EasyList cosmetic filters are bundled with the extension. Downloaded lists are data, not executable code.</p><p>The extension does not proxy your browsing, hide your IP address, or prevent every form of tracking. Websites and their providers still receive ordinary traffic that is not blocked.</p>
+--- 0.11.2/privacy.html
++++ 0.11.3/privacy.html
+@@ -5,7 +5,7 @@
+ <p class="hint">Your IP and signed-in identity remain visible to websites. <a href="privacy-policy.html" target="_blank" rel="noopener">Privacy policy ↗</a></p>
+ <section class="privacy-card"><h2>Tracking links <span class="scope">All websites</span></h2>
+ <label class="row"><span>Remove recognized tracking parameters<small>For supported page navigations; ad filters stay in place</small></span><input id="links" type="checkbox" role="switch" disabled></label>
+-<p class="hint">Removes common utm_* campaign fields and advertising click IDs. Leaves known signed and sign-in links, POST requests, page scripts and embedded resources alone. Unrecognized formats remain unchanged.</p>
++<p class="hint">Removes common utm_* campaign fields and advertising click IDs. Leaves known signed and sign-in links, POST requests, page scripts and embedded resources alone. Other tracking parameters remain unchanged. If a signed link breaks, keep original links for that hostname.</p>
+ <label class="row"><span>Keep original links for this hostname<small>Use if a link or checkout stops working</small></span><input id="link-exempt" type="checkbox" role="switch" disabled></label><p id="links-message" role="status" class="message" hidden></p><p id="link-status" class="hint"></p></section>
+ <section class="privacy-card"><h2>Third-party cookies <span class="scope">Chrome-wide</span></h2>
+ <label class="row"><span>Ask Chrome to block third-party cookies<small>Optional · may affect embedded sign-ins</small></span><input id="cookies" type="checkbox" role="switch" disabled></label><p id="cookies-message" role="status" class="message" hidden></p><p id="cookie-status" role="status" class="hint"></p><button id="release-cookies" class="secondary" hidden>Remove our cookie override</button>
+--- 0.11.2/site-compat.js
++++ 0.11.3/site-compat.js
+@@ -20,6 +20,10 @@
+   update(enabled){
+    if(!enabled||!this.supported){this.restore();return;}
+    const doc=this.doc;
++   for(const [box,previous]of this.hidden)if(box.isConnected===false){
++    if(box.style.display==='none')box.style.setProperty('display',previous.value,previous.priority);
++    this.hidden.delete(box);
++   }
+    this.hidePlayerAds();
+    // Match the observed P21 ad-block message, not arbitrary dialogs or premium gates.
+    for(const box of [...(doc.body?.children||[])]){
+--- 0.11.2/strict-navigation.js
++++ 0.11.3/strict-navigation.js
+@@ -8,7 +8,12 @@
+    let entry=all[tabId];if(!entry&&!host)return;
+    if(!entry){const used=new Set(Object.values(all).map(e=>e.id));let id=10000;while(used.has(id))id+=2;if(id>10398)throw Error('Strict protection limit reached for 200 tabs.');entry={id,host};}
+    const previous=(await this.chrome.declarativeNetRequest.getSessionRules()).filter(r=>r.id===entry.id||r.id===entry.id+1);
+-   await this.chrome.declarativeNetRequest.updateSessionRules({removeRuleIds:[entry.id,entry.id+1],addRules:host&&this.strict.active(c,host,this.core)?this.strict.rules(tabId,host,c.strict[host]||[],entry.id):[]});
++   const next=host&&this.strict.active(c,host,this.core)?this.strict.rules(tabId,host,c.strict[host]||[],entry.id):[];
++   for(const r of next.filter(r=>r.condition.regexFilter)){
++    const result=await this.chrome.declarativeNetRequest.isRegexSupported({regex:r.condition.regexFilter,requireCapturing:false,isCaseSensitive:false});
++    if(!result.isSupported)throw Error('Chrome cannot install these strict destinations ('+(result.reason||'unsupported rule')+'). Use fewer or shorter hostnames; existing protection was retained.');
++   }
++   await this.chrome.declarativeNetRequest.updateSessionRules({removeRuleIds:[entry.id,entry.id+1],addRules:next});
+    if(host)all[tabId]={id:entry.id,host};else delete all[tabId];
+    try{await this.chrome.storage.session.set({strictTabs:all});}catch(e){await this.chrome.declarativeNetRequest.updateSessionRules({removeRuleIds:[entry.id,entry.id+1],addRules:previous});throw e;}
+   }
