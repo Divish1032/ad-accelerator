@@ -1,11 +1,13 @@
 # Ad Accelerator — new-session handoff
 
-Updated September 11, 2026. The 0.11.3 audit remains the baseline; current canonical source is the 0.16.2 Chrome Web Store release candidate. Live Prime inspection showed that consecutive creatives share the episode timeline and one continuously decreasing pod countdown, while Prime restores the original playback rate between creatives. The bounded Prime recovery now uses that real transition pattern; 0.16.1's reset-countdown model is superseded. The first 20-platform qualification batch produced three narrow adapters—ZEE5, SonyLIV and WeTV—and 17 explicitly unimplemented outcomes. Do not restart from an older ZIP or treat generic detection or the research catalog as universal support.
+Updated October 30, 2026. Work from the selected checkout; historical absolute paths below are not active workspace instructions. Version **0.16.3** repairs the undefined-config disconnect crash. Background configuration replies are validated before assignment, and disconnect installs disabled local state before restoring page changes. See `work/VERIFICATION-0.16.3.md` and `work/RELEASE-CHECKLIST-0.16.3.md`.
+
+Historical 0.16.2 handoff: The 0.11.3 audit remains the baseline; current canonical source is the 0.16.2 Chrome Web Store release candidate. Live Prime inspection showed that consecutive creatives share the episode timeline and one continuously decreasing pod countdown, while Prime restores the original playback rate between creatives. The bounded Prime recovery now uses that real transition pattern; 0.16.1's reset-countdown model is superseded. The first 20-platform qualification batch produced three narrow adapters—ZEE5, SonyLIV and WeTV—and 17 explicitly unimplemented outcomes. Do not restart from an older ZIP or treat generic detection or the research catalog as universal support.
 
 ## First reads
 
-1. Read applicable AGENTS.md and this file. Stay in `/Users/itachi/Documents/Github/ad-accelerator`; preserve unrelated work.
-2. Inspect `outputs/prime-ad-accelerator/manifest.json` and current source before relying on this handoff. Expected version: **0.16.2**.
+1. Read applicable AGENTS.md and this file. Stay in the selected checkout; preserve unrelated work.
+2. Inspect `outputs/prime-ad-accelerator/manifest.json` and current source before relying on this handoff. Expected version: **0.16.3**.
 3. Read [audit and readiness decision](outputs/baseline-audit-0.11.3/AUDIT.md), then [native qualification gates](outputs/baseline-audit-0.11.3/INSTALLED-CHECKLIST.md).
 4. Read [research overview](outputs/global-streaming-research-2026-09-06/RESEARCH.md), [qualification follow-up](outputs/global-streaming-research-2026-09-06/QUALIFICATION-FOLLOWUP.md), and the machine-readable inventory alongside them.
 

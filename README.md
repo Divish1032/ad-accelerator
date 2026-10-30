@@ -2,7 +2,7 @@
 
 Ad Accelerator is a Chrome extension that filters listed ad and tracker destinations, reduces unwanted popups, and speeds up detected video ads without changing normal playback.
 
-This repository contains the current **0.16.2** development release candidate. It is not yet published in the Chrome Web Store, so install it as an unpacked extension.
+This repository contains the current **0.16.3** development release candidate. It is not yet published in the Chrome Web Store, so install it as an unpacked extension.
 
 ## Install in Chrome
 
@@ -57,7 +57,7 @@ There is also an experimental generic HTML5 player detector. It is deliberately 
 - Live playback, audio services, Shorts, unknown player states, and ordinary content are excluded rather than guessed at.
 - Video assistance does not unlock subscriptions, bypass DRM, remove every ad, or guarantee a specific result on every site.
 - The research catalog in this repository is not a list of supported services.
-- The current source passes **261 automated tests**, but a test suite is not proof of every installed-Chrome, site, account, region, or ad transition.
+- The current source passes **276 automated tests**, but a test suite is not proof of every installed-Chrome, site, account, region, or ad transition.
 
 If a site behaves unexpectedly, use the extension's site pause or disable the relevant control before continuing playback.
 

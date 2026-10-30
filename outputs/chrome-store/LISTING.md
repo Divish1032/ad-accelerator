@@ -1,4 +1,4 @@
-# Chrome Web Store listing — Ad Accelerator 0.16.2
+# Chrome Web Store listing — Ad Accelerator 0.16.3
 
 Developer: Divyansh Kumar  
 Support email: divyansh1032@gmail.com  

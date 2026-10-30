@@ -1,4 +1,4 @@
-# Reviewer instructions — Ad Accelerator 0.16.2
+# Reviewer instructions — Ad Accelerator 0.16.3
 
 No extension account, payment, backend credentials or subscription is needed. Install the upload ZIP on Chrome 145 or later. The manifest is at the archive root. Bundled filter data initializes locally; daily updates can be disabled. Filter source snapshots, licenses and provenance are packaged with the extension.
 
@@ -15,4 +15,4 @@ No extension account, payment, backend credentials or subscription is needed. In
 
 ## Validation boundary
 
-The release candidate passes 261 automated tests and package validation. Live inspection confirmed Prime's current shared-timeline and continuous pod-countdown behavior, but the patched 0.16.2 build still requires reload and a fresh multi-ad pod for installed confirmation. Prior browser work observed real qualifying ad media on the named services. Exact installed results for every ad transition, permission, restart, upgrade and coexistence gate are not independently recorded because this session cannot control Chrome’s extension-management page. Normal playback or the absence of an ad does not prove ad handling.
+The release candidate passes 276 automated tests and package validation. Version 0.16.3 adds configuration-failure and delayed-reply regressions; the reported undefined-config crash was reproduced before the repair. Native reload and upgrade verification remain pending. Live inspection confirmed Prime's current shared-timeline and continuous pod-countdown behavior, but the patched 0.16.3 build still requires reload and a fresh multi-ad pod for installed confirmation. Prior browser work observed real qualifying ad media on the named services. Exact installed results for every ad transition, permission, restart, upgrade and coexistence gate are not independently recorded because this session cannot control Chrome’s extension-management page. Normal playback or the absence of an ad does not prove ad handling.

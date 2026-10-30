@@ -14,7 +14,8 @@
  chrome.runtime.onMessage.addListener(pickerMessage);
  function disconnect(){
    if(disconnected)return;disconnected=true;stopped=true;++refreshId;
-   config.enabled=false;adaptiveElements?.stop();picker.stop();custom.restore();compatibility.restore();accelerator.stop('Extension disconnected; refresh this tab');skipper.reset();genericDetector.reset();css?.remove();
+   config={enabled:false,cosmetics:false};settings={enabled:false};
+   adaptiveElements?.stop();picker.stop();custom.restore();compatibility.restore();accelerator.stop('Extension disconnected; refresh this tab');skipper.reset();genericDetector.reset();css?.remove();
    timers.forEach(clearInterval);
    try{chrome.runtime.onMessage.removeListener(pickerMessage);chrome.storage.onChanged.removeListener(storageChanged);}catch{}
  }
@@ -29,7 +30,11 @@
    const id=++refreshId;
    try{
      const next=await send({type:'page-config'});
-     if(id!==refreshId)return;config=next;
+     if(id!==refreshId)return;
+     // A resolved message can still have no usable reply. Keep the last valid
+     // config intact so the failure path can restore the page safely.
+     if(!next||typeof next!=='object'||Array.isArray(next)||typeof next.enabled!=='boolean'||typeof next.cosmetics!=='boolean'||!next.videoSettings||typeof next.videoSettings!=='object'||Array.isArray(next.videoSettings)||typeof next.videoSettings.enabled!=='boolean')throw Error('Invalid page configuration');
+     config=next;
      settings=config.videoSettings;
      adaptiveElements?.update(config.adaptiveRules,config.adaptiveActive,config.enabled&&config.cosmetics);
      if(!config.enabled||!config.custom)picker.stop();
